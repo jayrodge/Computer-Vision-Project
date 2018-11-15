@@ -1,3 +1,4 @@
+from scipy.spatial import distance
 import numpy as np
 import imutils
 import dlib
@@ -106,16 +107,19 @@ class ddestimator:
 		is_singular = sin_x < 0.000001
 
 		if not is_singular:
-			x = math.degrees(math.atan2(projmat[2, 1], projmat[2, 2]))
-			y = math.degrees(math.atan2(-projmat[2, 0], sin_x))
-			z = math.degrees(math.atan2(projmat[1, 0], projmat[0, 0]))
+			x = math.atan2(projmat[2, 1], projmat[2, 2])
+			y = math.atan2(-projmat[2, 0], sin_x)
+			z = math.atan2(projmat[1, 0], projmat[0, 0])
 		else:
-			x = math.degrees(math.atan2(-projmat[1, 2], projmat[1, 1]))
-			y = math.degrees(math.atan2(-projmat[2, 0], sy))
+			x = math.atan2(-projmat[1, 2], projmat[1, 1])
+			y = math.atan2(-projmat[2, 0], sy)
 			z = 0
 
-		euler = np.array([x, y, z]).T
-		return euler
+		euler = np.array([math.degrees(x), math.degrees(y), math.degrees(z)]).T
+		# As explained in this paper: http://www.mirlab.org/conference_papers/international_conference/ICME%202004/html/papers/P38081.pdf
+		combined = math.degrees(abs(x) + abs(y) + abs(z))
+		#print(str(combined) + " : "+str(euler))
+		return euler, combined
 
 	'''
 	3D -> 2D point translation from 14/58 'anchor' points of 3D model to 14/68 points of 2D model using this chart (0 indexed)
@@ -150,9 +154,17 @@ class ddestimator:
 		projmat = np.hstack((rotmat, transvec))
 
 		# Get Euler angle from projection matrix
-		euler = self.euler_decomposition(projmat)
+		euler, euler_c = self.euler_decomposition(projmat)
 
-		#print(str(self.push_to_log('euler_x', euler[0])))
+		# Set log entries
+		self.purge_from_log(2000, 'euler_x')
+		self.push_to_log('euler_x', euler[0])
+		self.purge_from_log(2000, 'euler_x')
+		self.push_to_log('euler_y', euler[1])
+		self.purge_from_log(2000, 'euler_x')
+		self.push_to_log('euler_z', euler[2])
+		self.purge_from_log(2000, 'euler_c')
+		self.push_to_log('euler_c', euler_c)
 
 		return euler, rotvec, transvec
 
@@ -180,6 +192,15 @@ class ddestimator:
 		return frame
 
 	def est_gaze_dir(self, points):
+		#distance.euclidean(points[39], points[36])
+		left_eye_left = (distance.euclidean(points[37], points[36]) + distance.euclidean(points[41], points[36]))/2
+		left_eye_right =(distance.euclidean(points[38], points[39]) + distance.euclidean(points[40], points[39]))/2
+		# distance.euclidean(points[45], points[42])
+		right_eye_left = (distance.euclidean(points[43], points[42]) + distance.euclidean(points[47], points[42]))/2
+		right_eye_right =(distance.euclidean(points[44], points[45]) + distance.euclidean(points[46], points[45]))/2
+		#print("==========================")
+		#print("L: %.6f = %.6f / %.6f " % (left_eye_left/left_eye_right,left_eye_left,left_eye_right))
+		#print("R: %.6f = %.6f / %.6f " % (right_eye_left / right_eye_right, right_eye_left, right_eye_right))
 		return None
 
 	def draw_gaze_lines(self, lines):
@@ -192,12 +213,12 @@ class ddestimator:
 		ts = int(round(time.time() * 1000))
 		#self.log.loc[-1] = [ts, type, value]
 		self.log = self.log.append({'ts': ts, 'key':key, 'value':value}, ignore_index=True)
-		return self.log.count()
+		return self.log['ts'].count()
 
 	def purge_from_log(self, ts_threshold, key):
 		ts = int(round(time.time() * 1000)) - ts_threshold
-		self.log = self.log.drop(df[(self.log.ts < ts) & (df.self.key = key)].index)
-		return self.log.count()
+		self.log = self.log.drop(self.log[(self.log.ts < ts) & (self.log.key == key)].index)
+		return self.log['ts'].count()
 
 	# JAY RODGE ===============================================
 	def est_eye_closedness(self, points):
@@ -214,4 +235,3 @@ class ddestimator:
 
 	def get_mouth_openess_over_time(self, time=4500, threshold=None):
 		return None
-
