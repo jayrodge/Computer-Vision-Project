@@ -23,7 +23,7 @@ def eye_aspect_ratio(eye):
 	return ear
 	
 thresh = 0.25 # For EAR
-frame_check = 60 
+frame_check = 40
 detect = dlib.get_frontal_face_detector()
 predict = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")# Dat file is the crux of the code
 
@@ -60,7 +60,8 @@ while True:
 
         # Calculating Distance 63rd and 67th facial landmark
 		mouth_open=distance.euclidean(mouth[9], mouth[13])
-		print(mouth_open)
+		# print(mouth_open)
+		
         # Highlighting Eyes and mouth for reference
 		mouthHull = cv2.convexHull(mouth)
 		leftEyeHull = cv2.convexHull(leftEye)
@@ -70,7 +71,7 @@ while True:
 		cv2.drawContours(frame, [mouthHull],-1, (0, 255, 0), 1)
 
 		#Applying Threshold
-		if ear < thresh or mouth_open > 20 :
+		if ear < thresh or mouth_open > 40 :
 			flag += 1
 			print (flag)
 			if flag >= frame_check:
