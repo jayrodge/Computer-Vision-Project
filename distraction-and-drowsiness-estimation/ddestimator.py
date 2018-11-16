@@ -313,9 +313,9 @@ class ddestimator:
 
 	def calc_kss(self, ts_threshold=10000):
 		ts = self.get_current_ts() - ts_threshold
-		count = self.log[(self.log.ts > ts) & (self.log.key == 'distracted')]['value'].count()
+		count = self.log[(self.log.ts > ts) & ((self.log.key == 'distracted') | (self.log.key=='drowsiness'))]['value'].count()
 		if count > round(ts_threshold / 200):
-			sum = self.log[(self.log.ts > ts) & (self.log.key == 'distracted')]['value'].sum()
+			sum = self.log[(self.log.ts > ts) & ((self.log.key == 'distracted') | (self.log.key=='drowsiness'))]['value'].sum()
 			if not math.isnan(sum):
 				kss = sum / count
 				self.push_to_log('kss', kss)
@@ -382,42 +382,54 @@ class ddestimator:
 	def est_eye_closedness(self, points):
 		l_ear = self.get_ear(points[42:48])
 		r_ear = self.get_ear(points[36:42])
-		ear = (l_ear + r_ear) / 2
-		# print(str(self.push_to_log('ear', ear)))
+		ear = (l_ear+r_ear)/2
+		self.push_to_log('ear', ear)
 		return ear
 
 	def get_ear(self, eye_points):
-		A = distance.euclidean(eye_points[1], eye_points[5])  # p2-p6
-		B = distance.euclidean(eye_points[2], eye_points[4])  # p3-p5
-		C = distance.euclidean(eye_points[0], eye_points[3])  # p1-p4
+		A = distance.euclidean(eye_points[1], eye_points[5])	#p2-p6
+		B = distance.euclidean(eye_points[2], eye_points[4])	#p3-p5
+		C = distance.euclidean(eye_points[0], eye_points[3])	#p1-p4
 		ear = (A + B) / (2.0 * C)
-
+		
 		return ear
 
-	def draw_eye_lines(self, frame, leftEye, rightEye):
+	def draw_eye_lines(self,frame,leftEye,rightEye):
 		leftEyeHull = cv2.convexHull(leftEye)
 		rightEyeHull = cv2.convexHull(rightEye)
-		cv2.drawContours(frame, [leftEyeHull], -1, (0, 0, 255), 1)
+		cv2.drawContours(frame, [leftEyeHull], -1, (0, 0, 255), 1) 
 		cv2.drawContours(frame, [rightEyeHull], -1, (0, 0, 255), 1)
 		return frame
 
-	def get_eye_closedness_over_time(self, points, time=2000, threshold=None):
-		ear = self.est_eye_closedness(points)
-		self.push_to_log('ear', ear)
-		print(str(self.log))
-		return ear
+	def get_eye_closedness_over_time(self, points,ts_threshold=2000, threshold=None):
+		ear=self.est_eye_closedness(points)
+		ts = self.get_current_ts() - ts_threshold
+		count = self.log[(self.log.ts > ts) & (self.log.key == 'ear')]['value'].count()
+		avg = self.log[(ts < self.log.ts) & (self.log.key == 'ear')]['value'].mean()
+		if avg<0.25:
+			self.push_to_log('drowsiness',self.weights[2])
+			return True
+		else:
+			self.push_to_log('drowsiness',0)
+			return False
 
 	def est_mouth_openess(self, mouth_points):
-		mouth_open = distance.euclidean(mouth[9], mouth[13])
-		return None
+		mouth_open=distance.euclidean(mouth_points[9], mouth_points[13])
+		self.push_to_log('mouth',mouth_open)
+		return mouth_open
 
-	def draw_mouth(self, frame, mouth_points):
+	def draw_mouth(self,frame, mouth_points):
 		mouthHull = cv2.convexHull(mouth_points)
-		cv2.drawContours(frame, [mouthHull], -1, (0, 0, 255), 1)
+		cv2.drawContours(frame, [mouthHull],-1, (0, 0, 255), 1)
 		return frame
 
-	def get_mouth_openess_over_time(self, time=4500, threshold=None):
-		mouth_ratio = self.est_mouth_openess(points[60:67])
-		self.push_to_log('mouth', mouth_ratio)
-		return mouth
-
+	def get_mouth_openess_over_time(self,points, threshold=4500):
+		ts = self.get_current_ts() - threshold
+		mouth_ratio=self.est_mouth_openess(points[48:68])			
+		avg = self.log[(ts < self.log.ts) & (self.log.key == 'mouth')]['value'].mean()
+		if avg>26:
+			self.push_to_log('drowsiness',self.weights[3])
+			return True
+		else:
+			self.push_to_log('drowsiness',0)
+			return False

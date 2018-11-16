@@ -59,7 +59,8 @@ class demo1:
 			if self.show_points:
 				frame = self.ddestimator.draw_points_on_face(frame, points, (0, 0, 255))
 			euler, rotation, translation = self.ddestimator.est_head_dir(points)
-
+			eye_closeness = self.ddestimator.get_eye_closedness_over_time(points)
+			yawn = self.ddestimator.get_mouth_openess_over_time(points)
 			# TODO: do calibration only once
 			has_calibration, _, meds = self.ddestimator.get_med_eulers()
 			#if has_calibration:
@@ -76,7 +77,7 @@ class demo1:
 			if self.show_ear:
 				frame=self.ddestimator.draw_eye_lines(frame,points[42:48],points[36:42])
 			if self.show_yawn:
-				frame = self.ddestimator.draw_mouth(frame,points[60:67])
+				frame = self.ddestimator.draw_mouth(frame,points[60:68])
 			if self.show_dd:
 				head_distraction, _, _ = self.ddestimator.est_head_dir_over_time()
 				if not head_distraction:
@@ -89,6 +90,13 @@ class demo1:
 				if gaze_distraction:
 					cv2.putText(frame, "distracted", (20,20),
 								cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)
+
+				if yawn:
+					cv2.putText(frame,"DROWSY",(350,20),
+					            cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)	
+				if eye_closeness:
+					cv2.putText(frame,"drowsy",(375,20),
+					            cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1,bottomLeftOrigin=False)
 				kss = self.ddestimator.calc_kss()
 				if kss is not None:
 					kss_int = int(round(kss*10))
