@@ -394,42 +394,45 @@ class ddestimator:
 		
 		return ear
 
-	def draw_eye_lines(self,frame,leftEye,rightEye):
+	def draw_eye_lines(self, frame, leftEye, rightEye):
 		leftEyeHull = cv2.convexHull(leftEye)
 		rightEyeHull = cv2.convexHull(rightEye)
 		cv2.drawContours(frame, [leftEyeHull], -1, (0, 0, 255), 1) 
 		cv2.drawContours(frame, [rightEyeHull], -1, (0, 0, 255), 1)
 		return frame
 
-	def get_eye_closedness_over_time(self, points,ts_threshold=2000, threshold=None):
+	def get_eye_closedness_over_time(self, points, ts_threshold=2000, threshold=None):
 		ear=self.est_eye_closedness(points)
 		ts = self.get_current_ts() - ts_threshold
 		count = self.log[(self.log.ts > ts) & (self.log.key == 'ear')]['value'].count()
 		avg = self.log[(ts < self.log.ts) & (self.log.key == 'ear')]['value'].mean()
-		if avg<0.25:
-			self.push_to_log('drowsiness',self.weights[2])
+		if avg < 0.25:
+			self.push_to_log('drowsiness', self.weights[2])
 			return True
 		else:
-			self.push_to_log('drowsiness',0)
+			self.push_to_log('drowsiness', 0)
 			return False
-
+	
 	def est_mouth_openess(self, mouth_points):
 		mouth_open=distance.euclidean(mouth_points[9], mouth_points[13])
-		self.push_to_log('mouth',mouth_open)
+		self.push_to_log('mouth', mouth_open)
 		return mouth_open
 
-	def draw_mouth(self,frame, mouth_points):
+	def draw_mouth(self, frame, mouth_points):
 		mouthHull = cv2.convexHull(mouth_points)
-		cv2.drawContours(frame, [mouthHull],-1, (0, 0, 255), 1)
+		cv2.drawContours(frame, [mouthHull], -1, (0, 0, 255), 1)
 		return frame
 
-	def get_mouth_openess_over_time(self,points, threshold=4500):
+	def get_mouth_openess_over_time(self, points, threshold=4500):
 		ts = self.get_current_ts() - threshold
 		mouth_ratio=self.est_mouth_openess(points[48:68])			
 		avg = self.log[(ts < self.log.ts) & (self.log.key == 'mouth')]['value'].mean()
-		if avg>26:
-			self.push_to_log('drowsiness',self.weights[3])
+		if avg > 26:
+			self.push_to_log('drowsiness', self.weights[3])
 			return True
 		else:
-			self.push_to_log('drowsiness',0)
+			self.push_to_log('drowsiness', 0)
 			return False
+
+
+	
