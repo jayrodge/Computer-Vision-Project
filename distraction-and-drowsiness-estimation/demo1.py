@@ -53,9 +53,29 @@ class demo1:
 			if self.show_points:
 				frame = self.ddestimator.draw_points_on_face(frame, points, (0, 0, 255))
 			euler, rotation, translation = self.ddestimator.est_head_dir(points)
-			bc_2d_coords = self.ddestimator.proj_head_bounding_cube_coords(rotation, translation)
 			if self.show_bounding:
-				frame = self.ddestimator.draw_bounding_cube(frame, bc_2d_coords, (0, 0, 255))
+				bc_2d_coords = self.ddestimator.proj_head_bounding_cube_coords(rotation, translation)
+				frame = self.ddestimator.draw_bounding_cube(frame, bc_2d_coords, (0, 0, 255), euler)
+			_, _, gaze_D = self.ddestimator.est_gaze_dir(points)
+			if self.show_gaze:
+				gl_2d_coords = self.ddestimator.proj_gaze_line_coords(rotation, translation, gaze_D)
+				self.ddestimator.draw_gaze_line(frame, gl_2d_coords, (0, 255, 0), gaze_D)
+
+			if self.show_dd:
+				head_distraction, _, _ = self.ddestimator.est_head_dir_over_time()
+				if not head_distraction:
+					gaze_distraction, _, _ = self.ddestimator.est_gaze_dir_over_time()
+				else:
+					gaze_distraction = False
+				if head_distraction:
+					cv2.putText(frame, "DISTRACTED", (20,20),
+					            cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)
+				if gaze_distraction:
+					cv2.putText(frame, "distracted", (20,20),
+					            cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)
+				kss = self.ddestimator.calc_kss()
+				if kss is not None:
+					frame = self.ddestimator.draw_progress_bar(frame, 140, 35, kss)
 
 		return frame
 
