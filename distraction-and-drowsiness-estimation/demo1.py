@@ -1,7 +1,9 @@
 import imutils
 import cv2
 import sys
+import time
 import ddestimator
+import pandas as pd
 
 class demo1:
 
@@ -20,6 +22,10 @@ class demo1:
 	K_DD = ord('d')
 	K_NONE = ord('n')
 	K_REFRESH = ord('r')
+	K_SAVE_LOG = ord('l')
+	K_HELP = ord('h')
+
+	LOG_PATH = './kss_%ts.csv'
 
 	def __init__(self):
 		cv2.namedWindow(demo1.WINDOW_TITLE)
@@ -53,10 +59,17 @@ class demo1:
 			if self.show_points:
 				frame = self.ddestimator.draw_points_on_face(frame, points, (0, 0, 255))
 			euler, rotation, translation = self.ddestimator.est_head_dir(points)
+
+			# TODO: do calibration only once
+			has_calibration, _, meds = self.ddestimator.get_med_eulers()
+			#if has_calibration:
+			#	print(str(meds*-1))
+
 			if self.show_bounding:
 				bc_2d_coords = self.ddestimator.proj_head_bounding_cube_coords(rotation, translation)
 				frame = self.ddestimator.draw_bounding_cube(frame, bc_2d_coords, (0, 0, 255), euler)
 			_, _, gaze_D = self.ddestimator.est_gaze_dir(points)
+
 			if self.show_gaze:
 				gl_2d_coords = self.ddestimator.proj_gaze_line_coords(rotation, translation, gaze_D)
 				self.ddestimator.draw_gaze_line(frame, gl_2d_coords, (0, 255, 0), gaze_D)
@@ -72,13 +85,14 @@ class demo1:
 					gaze_distraction = False
 				if head_distraction:
 					cv2.putText(frame, "DISTRACTED", (20,20),
-					            cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)
+								cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)
 				if gaze_distraction:
 					cv2.putText(frame, "distracted", (20,20),
-					            cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)
+								cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)
 				kss = self.ddestimator.calc_kss()
 				if kss is not None:
-					frame = self.ddestimator.draw_progress_bar(frame, 140, 35, kss)
+					kss_int = int(round(kss*10))
+					frame = self.ddestimator.draw_progress_bar(frame, 140, 35, kss, str(kss_int))
 
 		return frame
 
@@ -117,10 +131,12 @@ class demo1:
 			return None
 
 		elif pressed_key == demo1.K_DD:
+			print('-> SHOW DROWSINESS & DISTRACTION ESTIMATIONS')
 			self.show_dd = True
 			return None
 
 		elif pressed_key == demo1.K_NONE:
+			print('-> SHOW NO ESTIMATIONS')
 			self.show_bounding = False
 			self.show_gaze = False
 			self.show_ear = False
@@ -129,12 +145,27 @@ class demo1:
 			return None
 
 		elif pressed_key == demo1.K_REFRESH:
+			print('-> RESET SHOW TO DEFAULT')
 			self.show_bounding = False
 			self.show_gaze = False
 			self.show_ear = False
 			self.show_yawn = False
 			self.show_dd = True
 			return None
+
+		elif pressed_key == demo1.K_SAVE_LOG:
+			print('-> SAVE LOG FILE WITH KSS ESTIMATIONS')
+			kss_log = self.ddestimator.fetch_log('kss')
+			ts = int(round(time.time() * 1000))
+			path = (demo1.LOG_PATH).replace('%ts', str(ts))
+			print("\t"+path)
+			kss_log.to_csv(path)
+			return None
+
+		# TODO: help screen
+		elif pressed_key == demo1.K_HELP:
+			return None
+
 		else:
 			return None
 

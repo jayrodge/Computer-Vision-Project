@@ -7,21 +7,24 @@ import time
 import math
 import pandas as pd
 
-class ddestimator:
 
-	#JAY RODGE ===============================================
+class ddestimator:
+	# JAY RODGE ===============================================
 
 	TRAINED_MODEL_PATH = './shape_predictor_68_face_landmarks.dat'
 
-	def __init__(self):
+	def __init__(self, weights=[1.25, 0.5, 2, 1], purge=True):
 		self.detector = dlib.get_frontal_face_detector()
 		self.predictor = dlib.shape_predictor(ddestimator.TRAINED_MODEL_PATH)
 		self.start_time = int(round(time.time() * 1000))
-		self.log = pd.DataFrame(data=[], columns=['ts','key','value'])
+		self.log = pd.DataFrame(data=[], columns=['ts', 'key', 'value'])
 		self.log.set_index(['ts', 'key'])
+		self.purge = purge
+		self.weights = weights
+		self.calibration_offset = [0, 0, 0]
 
 	# Used the following code as reference: http://dlib.net/face_landmark_detection.py.html
-	def detect_faces(self,  frame, resize_to_width=None, use_gray=True):
+	def detect_faces(self, frame, resize_to_width=None, use_gray=True):
 		# Faster prediction when frame is resized
 		if resize_to_width is not None:
 			frame = imutils.resize(frame, width=resize_to_width)
@@ -31,7 +34,7 @@ class ddestimator:
 		else:
 			dframe = frame
 
-		#Detect faces in frame
+		# Detect faces in frame
 		faces_loc = self.detector(dframe, 0)
 
 		return faces_loc
@@ -40,7 +43,7 @@ class ddestimator:
 		points = np.zeros((68, 2), dtype=dtype)
 
 		for j in range(0, 68):
-			points[j] = (shape.part(j).x,shape.part(j).y)
+			points[j] = (shape.part(j).x, shape.part(j).y)
 
 		return points
 
@@ -65,19 +68,19 @@ class ddestimator:
 	# These are the estimated 3D positions for 2D image points 17,21,22,26,36,39,42,45,31,35,48,54,57 & 8
 	# taken from this model http://aifi.isr.uc.pt/Downloads/OpenGL/glAnthropometric3DModel.cpp (line 69)
 	FACE_3D_ANCHOR_PTS = np.float32([[6.825897, 6.760612, 4.402142],
-                                     [1.330353, 7.122144, 6.903745],
-                                     [-1.330353, 7.122144, 6.903745],
-                                     [-6.825897, 6.760612, 4.402142],
-                                     [5.311432, 5.485328, 3.987654],
-                                     [1.789930, 5.393625, 4.413414],
-                                     [-1.789930, 5.393625, 4.413414],
-                                     [-5.311432, 5.485328, 3.987654],
-                                     [2.005628, 1.409845, 6.165652],
-                                     [-2.005628, 1.409845, 6.165652],
-                                     [2.774015, -2.080775, 5.048531],
-                                     [-2.774015, -2.080775, 5.048531],
-                                     [0.000000, -3.116408, 6.097667],
-                                     [0.000000, -7.415691, 4.070434]])
+									 [1.330353, 7.122144, 6.903745],
+									 [-1.330353, 7.122144, 6.903745],
+									 [-6.825897, 6.760612, 4.402142],
+									 [5.311432, 5.485328, 3.987654],
+									 [1.789930, 5.393625, 4.413414],
+									 [-1.789930, 5.393625, 4.413414],
+									 [-5.311432, 5.485328, 3.987654],
+									 [2.005628, 1.409845, 6.165652],
+									 [-2.005628, 1.409845, 6.165652],
+									 [2.774015, -2.080775, 5.048531],
+									 [-2.774015, -2.080775, 5.048531],
+									 [0.000000, -3.116408, 6.097667],
+									 [0.000000, -7.415691, 4.070434]])
 
 	# Retrieved these matrices with OpenCV's camera calibration method
 	# method https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
@@ -85,7 +88,7 @@ class ddestimator:
 											[0., 653.0839, 239.5],
 											[0., 0., 1.]])
 
-	#k1, k2, p1, p2, k3
+	# k1, k2, p1, p2, k3
 	CAMERA_DISTORTION_COEFFICIENTS = np.float32([[0.070834633684407095],
 												 [0.0691402],
 												 [0.],
@@ -94,13 +97,13 @@ class ddestimator:
 
 	# 8 Point Bounding Cube Coordinates
 	BOUNDING_CUBE_3D_COORDS = np.float32([[10.0, 10.0, 10.0],
-										[10.0, 10.0, -10.0],
-										[10.0, -10.0, -10.0],
-										[10.0, -10.0, 10.0],
-										[-10.0, 10.0, 10.0],
-										[-10.0, 10.0, -10.0],
-										[-10.0, -10.0, -10.0],
-										[-10.0, -10.0, 10.0]])
+										  [10.0, 10.0, -10.0],
+										  [10.0, -10.0, -10.0],
+										  [10.0, -10.0, 10.0],
+										  [-10.0, 10.0, 10.0],
+										  [-10.0, 10.0, -10.0],
+										  [-10.0, -10.0, -10.0],
+										  [-10.0, -10.0, 10.0]])
 
 	def euler_decomposition(self, projmat):
 		sin_x = math.sqrt(projmat[0, 0] * projmat[0, 0] + projmat[1, 0] * projmat[1, 0])
@@ -115,10 +118,12 @@ class ddestimator:
 			y = math.atan2(-projmat[2, 0], sy)
 			z = 0
 
-		euler = np.array([math.degrees(x), math.degrees(y), math.degrees(z)]).T
+		euler = [math.degrees(x), math.degrees(y), math.degrees(z)]
+		euler += self.calibration_offset
+		euler = np.array(euler).T
 		# As explained in this paper: http://www.mirlab.org/conference_papers/international_conference/ICME%202004/html/papers/P38081.pdf
 		combined = math.degrees(abs(x) + abs(y) + abs(z))
-		#print(str(combined) + " : "+str(euler))
+		# print(str(combined) + " : "+str(euler))
 		return euler, combined
 
 	'''
@@ -138,14 +143,17 @@ class ddestimator:
 	45 -> 57 (Bottom center of mouth)
 	6 -> 8 (Center of Chin)
 	'''
+
 	def est_head_dir(self, points):
-		face_2d_anchor_pts = np.array([points[17], points[21], points[22], points[26], points[36], points[39], points[42], points[45], points[31], points[35], points[48], points[54], points[57], points[8]], dtype=np.float32)
+		face_2d_anchor_pts = np.array(
+			[points[17], points[21], points[22], points[26], points[36], points[39], points[42], points[45], points[31],
+			 points[35], points[48], points[54], points[57], points[8]], dtype=np.float32)
 
 		# Get rotation and translation vectors for points and taking in account camera parameters
 		_, rotvec, transvec = cv2.solvePnP(ddestimator.FACE_3D_ANCHOR_PTS,
-											face_2d_anchor_pts,
-											ddestimator.CAMERA_CALIBRATION_MATRIX,
-											ddestimator.CAMERA_DISTORTION_COEFFICIENTS)
+										   face_2d_anchor_pts,
+										   ddestimator.CAMERA_CALIBRATION_MATRIX,
+										   ddestimator.CAMERA_DISTORTION_COEFFICIENTS)
 
 		# Get rotation matrix with rotation vector
 		rotmat, _ = cv2.Rodrigues(rotvec)
@@ -157,35 +165,61 @@ class ddestimator:
 		euler, euler_c = self.euler_decomposition(projmat)
 
 		# Set log entries
-		self.purge_from_log(2000, 'euler_x')
+		self.purge_from_log(3000, 'euler_x')
 		self.push_to_log('euler_x', euler[0])
-		self.purge_from_log(2000, 'euler_y')
+		self.purge_from_log(3000, 'euler_y')
 		self.push_to_log('euler_y', euler[1])
-		self.purge_from_log(2000, 'euler_z')
+		self.purge_from_log(3000, 'euler_z')
 		self.push_to_log('euler_z', euler[2])
-		self.purge_from_log(2000, 'euler_c')
+		self.purge_from_log(3000, 'euler_c')
 		self.push_to_log('euler_c', euler_c)
 
-		#print("\t%.2f, %.2f, %.2f, %.2f" % (euler[0], euler[1], euler[2], euler_c))
+		# print("\t%.2f, %.2f, %.2f, %.2f" % (euler[0], euler[1], euler[2], euler_c))
 		return euler, rotvec, transvec
 
-	def est_head_dir_over_time(self, ts_threshold=1000, angle_threshold=55):
-		ts = int(round(time.time() * 1000)) - ts_threshold
+	def get_med_eulers(self, ts_threshold=2000):
+		ts = self.get_current_ts() - ts_threshold
 		count = self.log[(self.log.ts > ts) & (self.log.key == 'euler_c')]['value'].count()
-		if count > round(ts_threshold/200):
+		if count > round(ts_threshold / 200):
+			med_x = self.log[(self.log.ts < ts) & (self.log.key == 'euler_x')]['value'].median()
+			med_y = self.log[(self.log.ts < ts) & (self.log.key == 'euler_y')]['value'].median()
+			med_z = self.log[(self.log.ts < ts) & (self.log.key == 'euler_z')]['value'].median()
+			med_c = self.log[(self.log.ts < ts) & (self.log.key == 'euler_c')]['value'].median()
+			if not math.isnan(med_x) and not math.isnan(med_y) and not math.isnan(med_z) and not math.isnan(med_c):
+				# print("%s: %.2f, %.2f, %.2f, %.2f" % (count, med_c, med_x, med_y, med_z))
+				# 16: 19.32, -2.31, 17.60, 0.32
+				# 18: 40.61, -9.53, -28.69, -2.38
+				return True, count, np.float32([med_x, med_y, med_z])
+			else:
+				return False, count, None
+		return None, count, None
+
+	def calibrate_camera_angles(self, eulers):
+		offsets = eulers * -1
+		# TODO: add past adjustments to existing eulers in log
+		self.calibration_offset = offsets
+		return None
+
+	def est_head_dir_over_time(self, ts_threshold=1000, angle_threshold=45):
+		ts = self.get_current_ts() - ts_threshold
+		count = self.log[(self.log.ts > ts) & (self.log.key == 'euler_c')]['value'].count()
+		if count > round(ts_threshold / 200):
 			min_x = self.log[(self.log.ts < ts) & (self.log.key == 'euler_x')]['value'].apply(abs).min()
 			min_y = self.log[(self.log.ts < ts) & (self.log.key == 'euler_y')]['value'].apply(abs).min()
 			min_z = self.log[(self.log.ts < ts) & (self.log.key == 'euler_z')]['value'].apply(abs).min()
 			min_c = self.log[(self.log.ts < ts) & (self.log.key == 'euler_c')]['value'].min()
-			#print("%s: %.2f, %.2f, %.2f, %.2f" % (count, min_c, min_x, min_y, min_z))
-			if min_x > angle_threshold or min_y > angle_threshold or min_z > angle_threshold or min_c > angle_threshold:
-				ret = True
-				self.push_to_log('distracted', 1)
+			if not math.isnan(min_x) and not math.isnan(min_y) and not math.isnan(min_z) and not math.isnan(min_c):
+				# print("%s: %.2f, %.2f, %.2f, %.2f" % (count, min_c, min_x, min_y, min_z))
+				if min_x > angle_threshold or min_y > angle_threshold or min_z > angle_threshold or min_c > angle_threshold:
+					ret = True
+					self.push_to_log('distracted', self.weights[0])
+				else:
+					ret = False
+					self.push_to_log('distracted', 0)
+				return ret, count, np.float32([min_x, min_y, min_z, min_c])
 			else:
-				ret = False
-				self.push_to_log('distracted', 0)
-			return ret, count, np.float32([min_x, min_y, min_z, min_c])
-		return False, count, None
+				return None, count, None
+		return None, count, None
 
 	def proj_head_bounding_cube_coords(self, rotation, translation):
 		# Project bounding box points using rotation and translation vectors and taking in account camera parameters
@@ -205,16 +239,16 @@ class ddestimator:
 
 		label = "({:7.2f}".format(euler[0]) + ",{:7.2f}".format(euler[1]) + ",{:7.2f}".format(euler[2]) + ")"
 		cv2.putText(frame, label, tuple(bc_2d_coords[0]),
-		            cv2.FONT_HERSHEY_PLAIN, 0.65, (0, 0, 0), thickness=1, bottomLeftOrigin=False)
+					cv2.FONT_HERSHEY_PLAIN, 0.65, (0, 0, 0), thickness=1, bottomLeftOrigin=False)
 		return frame
 
 	def est_gaze_dir(self, points):
-		L_L = (distance.euclidean(points[37], points[36]) + distance.euclidean(points[41], points[36]))/2
-		L_R =(distance.euclidean(points[38], points[39]) + distance.euclidean(points[40], points[39]))/2
-		R_L = (distance.euclidean(points[43], points[42]) + distance.euclidean(points[47], points[42]))/2
-		R_R =(distance.euclidean(points[44], points[45]) + distance.euclidean(points[46], points[45]))/2
-		L_ratio = abs((L_L / L_R) - 1)/0.25
-		R_ratio = abs((R_L / R_R) - 1)/0.25
+		L_L = (distance.euclidean(points[37], points[36]) + distance.euclidean(points[41], points[36])) / 2
+		L_R = (distance.euclidean(points[38], points[39]) + distance.euclidean(points[40], points[39])) / 2
+		R_L = (distance.euclidean(points[43], points[42]) + distance.euclidean(points[47], points[42])) / 2
+		R_R = (distance.euclidean(points[44], points[45]) + distance.euclidean(points[46], points[45])) / 2
+		L_ratio = abs((L_L / L_R) - 1) / 0.25
+		R_ratio = abs((R_L / R_R) - 1) / 0.25
 		gaze_L = math.degrees(0.3926991 * L_ratio)
 		gaze_R = math.degrees(0.3926991 * R_ratio)
 		gaze_D = abs(gaze_R - gaze_L)
@@ -222,7 +256,7 @@ class ddestimator:
 		# print("==========================")
 		# print("L: %.3f <- %.3f = %.3f / %.3f " % (L_ratio,L_L/L_R,L_L,L_R))
 		# print("R: %.3f <- %.3f = %.3f / %.3f " % (R_ratio,R_L / R_R, R_L, R_R))
-		#print("%.2f - %.2f = %.2f" % (gaze_L, gaze_R, gaze_D))
+		# print("%.2f - %.2f = %.2f" % (gaze_L, gaze_R, gaze_D))
 		self.purge_from_log(3000, 'gaze_L')
 		self.push_to_log('gaze_L', gaze_L)
 		self.purge_from_log(3000, 'gaze_R')
@@ -234,24 +268,25 @@ class ddestimator:
 			gaze_D = gaze_D * -1
 		return gaze_L, gaze_R, gaze_D
 
-	#TODO: Figure out the perfect angle threshold
-	def est_gaze_dir_over_time(self, ts_threshold=2000, angle_threshold=35):
-		ts = int(round(time.time() * 1000)) - ts_threshold
+	# TODO: Figure out the perfect angle threshold
+	def est_gaze_dir_over_time(self, ts_threshold=2000, angle_threshold=27.5):
+		ts = self.get_current_ts() - ts_threshold
 		count = self.log[(self.log.ts > ts) & (self.log.key == 'gaze_D')]['value'].count()
-		if count > round(ts_threshold/200):
+		if count > round(ts_threshold / 200):
 			avg_l = self.log[(self.log.ts < ts) & (self.log.key == 'gaze_L')]['value'].mean()
 			avg_r = self.log[(self.log.ts < ts) & (self.log.key == 'gaze_R')]['value'].mean()
 			med_d = self.log[(self.log.ts < ts) & (self.log.key == 'gaze_D')]['value'].median()
 			if not math.isnan(avg_l) and not math.isnan(avg_r) and not math.isnan(med_d):
 				# print("%s: %.2f, %.2f, %.2f" % (count, avg_l, avg_r, med_d))
-				if (avg_l > angle_threshold and med_d > (angle_threshold*0.75)) or (avg_r > angle_threshold and med_d > (angle_threshold*0.75)):
+				if (avg_l > angle_threshold and med_d > (angle_threshold * 0.75)) or (
+						avg_r > angle_threshold and med_d > (angle_threshold * 0.75)):
 					ret = True
-					self.push_to_log('distracted', 1)
+					self.push_to_log('distracted', self.weights[1])
 				else:
 					ret = False
 					self.push_to_log('distracted', 0)
 				return ret, count, np.float32([avg_l, avg_r, med_d])
-		return False, count, None
+		return None, count, None
 
 	def proj_gaze_line_coords(self, rotation, translation, gaze_D):
 		d = 10
@@ -259,8 +294,8 @@ class ddestimator:
 		x = d * math.tan(math.radians(abs(gaze_D)))
 		if gaze_D < 0:
 			x = x * -1
-		gl_3d_coords = np.float32([[0.0, 0.0, z],[x, 0.0, z + d]])
-		gl_2d_coords,_ = cv2.projectPoints(gl_3d_coords,
+		gl_3d_coords = np.float32([[0.0, 0.0, z], [x, 0.0, z + d]])
+		gl_2d_coords, _ = cv2.projectPoints(gl_3d_coords,
 											rotation,
 											translation,
 											ddestimator.CAMERA_CALIBRATION_MATRIX,
@@ -273,15 +308,20 @@ class ddestimator:
 			cv2.line(frame, tuple(gl_2d_coords[from_pt]), tuple(gl_2d_coords[to_pt]), color)
 
 		cv2.putText(frame, "{:7.2f}".format(gaze_D), tuple(gl_2d_coords[1]),
-		            cv2.FONT_HERSHEY_PLAIN, 0.65, (0, 0, 0), thickness=1, bottomLeftOrigin=False)
+					cv2.FONT_HERSHEY_PLAIN, 0.65, (0, 0, 0), thickness=1, bottomLeftOrigin=False)
 		return frame
 
 	def calc_kss(self, ts_threshold=10000):
-		ts = int(round(time.time() * 1000)) - ts_threshold
+		ts = self.get_current_ts() - ts_threshold
 		count = self.log[(self.log.ts > ts) & (self.log.key == 'distracted')]['value'].count()
-		if count > round(ts_threshold/200):
+		if count > round(ts_threshold / 200):
 			sum = self.log[(self.log.ts > ts) & (self.log.key == 'distracted')]['value'].sum()
-			return sum/count
+			if not math.isnan(sum):
+				kss = sum / count
+				self.push_to_log('kss', kss)
+				return kss
+			else:
+				return 0
 		else:
 			return None
 
@@ -307,56 +347,77 @@ class ddestimator:
 		frame[y_offset:y_offset + progressbar.shape[0], x_offset:x_offset + progressbar.shape[1]] = progressbar
 		return frame
 
+	def get_current_ts(self):
+		ts = int(round(time.time() * 1000)) - self.start_time
+		return ts
+
 	def push_to_log(self, key, value):
-		ts = int(round(time.time() * 1000))
-		#self.log.loc[-1] = [ts, type, value]
-		self.log = self.log.append({'ts': ts, 'key':key, 'value':value}, ignore_index=True)
+		ts = self.get_current_ts()
+		# self.log.loc[-1] = [ts, type, value]
+		self.log = self.log.append({'ts': ts, 'key': key, 'value': value}, ignore_index=True)
 		return self.log['ts'].count()
 
 	def purge_from_log(self, ts_threshold, key):
-		ts = int(round(time.time() * 1000)) - ts_threshold
-		self.log = self.log.drop(self.log[(self.log.ts < ts) & (self.log.key == key)].index)
+		if self.purge:
+			ts = self.get_current_ts() - ts_threshold
+			self.log = self.log.drop(self.log[(self.log.ts < ts) & (self.log.key == key)].index)
 		return self.log['ts'].count()
+
+	def fetch_log(self, key=None, ts_threshold=None):
+		log = None
+		if ts_threshold is None:
+			if key is None:
+				log = self.log
+			else:
+				log = self.log[self.log.key == key]
+		else:
+			ts = self.get_current_ts() - ts_threshold
+			if key is None:
+				log = self.log[(self.log.ts < ts)]
+			else:
+				log = self.log[(self.log.ts < ts) & (self.log.key == key)]
+		return log
 
 	# JAY RODGE ===============================================
 	def est_eye_closedness(self, points):
 		l_ear = self.get_ear(points[42:48])
 		r_ear = self.get_ear(points[36:42])
-		ear = (l_ear+r_ear)/2
+		ear = (l_ear + r_ear) / 2
 		# print(str(self.push_to_log('ear', ear)))
 		return ear
 
 	def get_ear(self, eye_points):
-		A = distance.euclidean(eye_points[1], eye_points[5])	#p2-p6
-		B = distance.euclidean(eye_points[2], eye_points[4])	#p3-p5
-		C = distance.euclidean(eye_points[0], eye_points[3])	#p1-p4
+		A = distance.euclidean(eye_points[1], eye_points[5])  # p2-p6
+		B = distance.euclidean(eye_points[2], eye_points[4])  # p3-p5
+		C = distance.euclidean(eye_points[0], eye_points[3])  # p1-p4
 		ear = (A + B) / (2.0 * C)
-		
+
 		return ear
 
-	def draw_eye_lines(self,frame,leftEye,rightEye):
+	def draw_eye_lines(self, frame, leftEye, rightEye):
 		leftEyeHull = cv2.convexHull(leftEye)
 		rightEyeHull = cv2.convexHull(rightEye)
-		cv2.drawContours(frame, [leftEyeHull], -1, (0, 0, 255), 1) 
+		cv2.drawContours(frame, [leftEyeHull], -1, (0, 0, 255), 1)
 		cv2.drawContours(frame, [rightEyeHull], -1, (0, 0, 255), 1)
 		return frame
 
-	def get_eye_closedness_over_time(self, points,time=2000, threshold=None):
-		ear=self.est_eye_closedness(points)
-		self.push_to_log('ear',ear)
+	def get_eye_closedness_over_time(self, points, time=2000, threshold=None):
+		ear = self.est_eye_closedness(points)
+		self.push_to_log('ear', ear)
 		print(str(self.log))
 		return ear
 
 	def est_mouth_openess(self, mouth_points):
-		mouth_open=distance.euclidean(mouth[9], mouth[13])
+		mouth_open = distance.euclidean(mouth[9], mouth[13])
 		return None
 
-	def draw_mouth(self,frame, mouth_points):
+	def draw_mouth(self, frame, mouth_points):
 		mouthHull = cv2.convexHull(mouth_points)
-		cv2.drawContours(frame, [mouthHull],-1, (0, 0, 255), 1)
+		cv2.drawContours(frame, [mouthHull], -1, (0, 0, 255), 1)
 		return frame
 
 	def get_mouth_openess_over_time(self, time=4500, threshold=None):
-		mouth_ratio=self.est_mouth_openess(points[60:67])
-		self.push_to_log('mouth',mouth_ratio)
+		mouth_ratio = self.est_mouth_openess(points[60:67])
+		self.push_to_log('mouth', mouth_ratio)
 		return mouth
+
