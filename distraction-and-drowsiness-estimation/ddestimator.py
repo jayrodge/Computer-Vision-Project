@@ -412,22 +412,39 @@ class ddestimator:
 		else:
 			self.push_to_log('drowsiness', 0)
 			return False
-	
-	def est_mouth_openess(self, mouth_points):
-		mouth_open=distance.euclidean(mouth_points[9], mouth_points[13])
-		self.push_to_log('mouth', mouth_open)
-		return mouth_open
+
+	def bottom_lip(self, landmarks):
+		bottom_lip_pts = []
+		for i in range(65,68):
+			bottom_lip_pts.append(landmarks[i])
+		for i in range(56,59):
+			bottom_lip_pts.append(landmarks[i])
+		bottom_lip_all_pts = np.squeeze(np.asarray(bottom_lip_pts))
+		# print(bottom_lip_all_pts)
+		bottom_lip_mean = np.mean(bottom_lip_pts,axis=0)
+		return int(bottom_lip_mean[1])
+
+
+	def mouth_open(self, points):
+		top_lip_center = self.top_lip(points)
+		bottom_lip_center = self.bottom_lip(points)
+		horizontal = distance.euclidean(points[60],points[64])
+		vertical = distance.euclidean(points[62],points[66])
+		lip_distance = abs(horizontal/vertical)
+		self.push_to_log('mouth',lip_distance)
+		return None
 
 	def draw_mouth(self, frame, mouth_points):
 		mouthHull = cv2.convexHull(mouth_points)
 		cv2.drawContours(frame, [mouthHull], -1, (0, 0, 255), 1)
 		return frame
-
-	def get_mouth_openess_over_time(self, points, threshold=4500):
+	
+	def get_mouth_openess_over_time(self, points, threshold=5000):
 		ts = self.get_current_ts() - threshold
-		mouth_ratio=self.est_mouth_openess(points[48:68])			
+		self.mouth_open(points)		
 		avg = self.log[(ts < self.log.ts) & (self.log.key == 'mouth')]['value'].mean()
-		if avg > 26:
+		print(avg)
+		if avg < 2.5:
 			self.push_to_log('drowsiness', self.weights[3])
 			return True
 		else:
