@@ -426,8 +426,6 @@ class ddestimator:
 
 
 	def mouth_open(self, points):
-		top_lip_center = self.top_lip(points)
-		bottom_lip_center = self.bottom_lip(points)
 		horizontal = distance.euclidean(points[60],points[64])
 		vertical = distance.euclidean(points[62],points[66])
 		lip_distance = abs(horizontal/vertical)
@@ -442,8 +440,7 @@ class ddestimator:
 	def get_mouth_openess_over_time(self, points, threshold=5000):
 		ts = self.get_current_ts() - threshold
 		self.mouth_open(points)		
-		avg = self.log[(ts < self.log.ts) & (self.log.key == 'mouth')]['value'].mean()
-		print(avg)
+		avg = self.log[(ts < self.log.ts) & (self.log.key == 'mouth')]['value'].std()
 		if avg < 2.5:
 			self.push_to_log('drowsiness', self.weights[3])
 			return True

@@ -96,7 +96,7 @@ class demo1:
 								cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)
 
 				if yawn:
-					cv2.putText(frame,"Yawning",(240,20),
+					cv2.putText(frame,"Yawning",(220,20),
 					            cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=1)	
 				if eye_closeness:
 					cv2.putText(frame,"drowsy",(375,20),
