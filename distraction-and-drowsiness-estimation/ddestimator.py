@@ -26,6 +26,7 @@ class ddestimator:
 		self.purge=purge
 		self.weights=weights
 		self.calibration_offset = [0, 0, 0]
+		self.has_calibrated = False
 
 	# Used the following code as reference: http://dlib.net/face_landmark_detection.py.html
 	def detect_faces(self,  frame, resize_to_width=None, use_gray=True):
@@ -188,8 +189,6 @@ class ddestimator:
 			med_c = self.log[(self.log.ts < ts) & (self.log.key == 'euler_c')]['value'].median()
 			if not math.isnan(med_x) and not math.isnan(med_y) and not math.isnan(med_z) and not math.isnan(med_c):
 				#print("%s: %.2f, %.2f, %.2f, %.2f" % (count, med_c, med_x, med_y, med_z))
-				#16: 19.32, -2.31, 17.60, 0.32
-				#18: 40.61, -9.53, -28.69, -2.38
 				return True, count, np.float32([med_x, med_y, med_z])
 			else:
 				return False, count, None
@@ -197,8 +196,15 @@ class ddestimator:
 
 	def calibrate_camera_angles(self, eulers):
 		offsets = eulers * -1
-		#TODO: add past adjustments to existing eulers in log
+		for i, row in self.log.iterrows():
+			if row['key'] == 'euler_x':
+				self.log.loc[i, 'value'] += offsets[0]
+			elif row['key'] == 'euler_y':
+				self.log.loc[i, 'value'] += offsets[1]
+			elif row['key'] == 'euler_z':
+				self.log.loc[i, 'value'] += offsets[2]
 		self.calibration_offset = offsets
+		self.has_calibrated = True
 		return None
 
 	def est_head_dir_over_time(self, ts_threshold=1000, angle_threshold=45):
@@ -269,7 +275,6 @@ class ddestimator:
 			gaze_D = gaze_D * -1
 		return gaze_L, gaze_R, gaze_D
 
-	#TODO: Figure out the perfect angle threshold
 	def est_gaze_dir_over_time(self, ts_threshold=2000, angle_threshold=27.5):
 		ts = self.get_current_ts() - ts_threshold
 		count = self.log[(self.log.ts > ts) & (self.log.key == 'gaze_D')]['value'].count()
@@ -405,13 +410,17 @@ class ddestimator:
 		ear = (A + B) / (2.0 * C)
 		return ear
 
-	def draw_eye_lines(self,frame,points):
+	def draw_eye_lines(self, frame, points, ear_R, ear_L):
 		leftEye = points[42:48]
 		rightEye = points[36:42]
 		leftEyeHull = cv2.convexHull(leftEye)
 		rightEyeHull = cv2.convexHull(rightEye)
 		cv2.drawContours(frame, [leftEyeHull], -1, (0, 0, 255), 1)
 		cv2.drawContours(frame, [rightEyeHull], -1, (0, 0, 255), 1)
+		cv2.putText(frame, "{:.2f}".format(ear_L), tuple([points[41][0]-5,points[41][1]+10]),
+					cv2.FONT_HERSHEY_PLAIN, 0.75, (0, 0, 0), thickness=1)
+		cv2.putText(frame, "{:.2f}".format(ear_R), tuple([points[47][0]-10,points[47][1]+10]),
+					cv2.FONT_HERSHEY_PLAIN, 0.75, (0, 0, 0), thickness=1)
 		return frame
 
 	def get_eye_closedness_over_time(self, ts_threshold=1000, ear_threshold=0.25):
@@ -445,17 +454,15 @@ class ddestimator:
 		mouth_left_right = distance.euclidean(points[60], points[64])
 		left_right = np.mean([lip_left_right, mouth_left_right])
 		mouth_ratio = top_bottom / left_right
-
-		#print("%.2f / %.2f = %.2f" % (top_bottom, left_right, mouth_ratio))
-		#print("[%s,%.3f]," % (self.get_current_ts(), mouth_ratio))
-
 		self.push_to_log('mar', mouth_ratio)
 		return mouth_ratio
 
-	def draw_mouth(self,frame, points):
+	def draw_mouth(self, frame, points, mar):
 		mouth_points = points[48:59]
 		mouthHull = cv2.convexHull(mouth_points)
 		cv2.drawContours(frame, [mouthHull],-1, (0, 0, 255), 1)
+		cv2.putText(frame, "{:.2f}".format(mar), tuple([points[57][0]-15,points[57][1]+10]),
+					cv2.FONT_HERSHEY_PLAIN, 0.75, (0, 0, 0), thickness=1)
 		return frame
 
 	def get_mouth_openess_over_time(self, ts_threshold=4750, mar_threshold=0.6):
