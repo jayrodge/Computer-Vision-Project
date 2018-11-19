@@ -184,6 +184,7 @@ class demo1:
 			self.show_ear = False
 			self.show_mar = False
 			self.show_dd = False
+			self.show_points = False
 			return None
 
 		elif pressed_key == demo1.K_REFRESH:
@@ -193,6 +194,7 @@ class demo1:
 			self.show_ear = False
 			self.show_mar = False
 			self.show_dd = True
+			self.show_points = False
 			return None
 
 		elif pressed_key == demo1.K_SAVE_LOG:
